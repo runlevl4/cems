@@ -16,3 +16,14 @@ Each of the core components is currently timer driven. I'd like to change that t
 - Monitor water level in the holding tank for the misting system
 
 Of these requirements, monitoring the water level is the most critical at the moment. My large controller died and I was only able to source a similar system with a much smaller tank. I have to fill it constantly and it's tucked away in the cabinet under the enclosure and not entirely easy to access. I frequently run the system dry and I want to prevent that. Both for her sake and mine.
+
+## Tech Stack
+
+|Technology|Description|More Info
+|--|--|
+|Go 1.15|Programming langugage|[Main Site](https://golang.org)
+|Raspberry Pi 3|Computer Platform|[Main Site](https://www.raspberrypi.org)
+|DHT22|Temp/Humidity Sensor|[Adafruit](https://learn.adafruit.com/dht)
+|HC-SR04|Ultrasonic Sensor|[Sparkfun](https://www.sparkfun.com/products/15569)
+|Prometheus|Metrics Platform|[https://prometheus.io](http://prometheus.io)
+|Grafana|Metrics Visualizatioin|[Pi Installation](https://grafana.com/tutorials/install-grafana-on-raspberry-pi/#3])
