@@ -206,7 +206,6 @@ func stats(w http.ResponseWriter, r *http.Request) {
 func getStats(log *log.Logger, pollSecs time.Duration) {
 	go func() {
 		for {
-			opsProcessed.Inc()
 			err := dht.HostInit()
 			if err != nil {
 				log.Println("HostInit error:", err)
@@ -247,10 +246,6 @@ func getStats(log *log.Logger, pollSecs time.Duration) {
 }
 
 var (
-	opsProcessed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "myapp_processed_ops_total",
-		Help: "The total number of processed events",
-	})
 	dhTemp = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "cems_temperature",
 		Help: "The current temperature.",
