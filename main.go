@@ -45,8 +45,11 @@ func run(log *log.Logger) error {
 			WriteTimeout    time.Duration `conf:"default:5s"`
 			ShutdownTimeout time.Duration `conf:"default:5s,noprint"`
 		}
+		App struct {
+			PollSecs time.Duration `conf:"default:30s"`
+		}
 	}
-
+		
 	cfg.Version.SVN = build
 	cfg.Version.Desc = "copyright information here"
 
@@ -99,7 +102,8 @@ func run(log *log.Logger) error {
 		}
 	}()
 
-	getStats(applog)
+	
+	getStats(applog, cfg.App.PollSecs)
 	
 	go func ()  {
 		http.Handle("/metrics", promhttp.Handler())
@@ -199,7 +203,7 @@ func stats(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, string(b))
 }
 
-func getStats(log *log.Logger) {
+func getStats(log *log.Logger, pollSecs time.Duration) {
 	go func() {
 		for {
 			opsProcessed.Inc()
@@ -236,7 +240,7 @@ func getStats(log *log.Logger) {
 
 			log.Println(string(b))
 
-			time.Sleep(time.Second * 5)
+			time.Sleep(pollSecs)
 		}
 	}()
 
