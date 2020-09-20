@@ -2,7 +2,7 @@
 
 For the past several years, I have been raising a veiled chameleon named 
 Jeffrina. She has a lovely mesh enclosure and currently resides in a nice 
-schefflera plant to prove hiding and hunting places. The enclosure is fairly 
+schefflera plant to provide hiding and hunting places. The enclosure is fairly 
 simple but I'll break it down here:
 
 - daylight lamp (provides vitamin D to keep her healthy)
@@ -14,10 +14,11 @@ simple but I'll break it down here:
 Each of the core components is currently timer driven. I'd like to change that 
 to make a more natural environment. I have three main goals:
 
+- [Exo-Terra Large Screen Enclosure](http://www.exo-terra.com/en/products/screen_terrarium.php)
 - Control daylight lamp based on the actual lunar cycle
 - Control heat lamp based on the actual enclosure temp
 - Control misting duration and frequency based on actual humidity
-- Monitor water level in the holding tank for the misting system
+- Monitor water level in the holding tank for the [misting system](http://www.exo-terra.com/en/products/monsoon_solo.php)
 
 Of these requirements, monitoring the water level is the most critical at the 
 moment. My large controller died and I was only able to source a similar 
