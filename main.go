@@ -18,6 +18,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"periph.io/x/periph/conn/gpio"
+	"periph.io/x/periph/conn/gpio/gpioreg"
+	"periph.io/x/periph/host"
 )
 
 var build = "develop"
@@ -46,10 +49,10 @@ func run(log *log.Logger) error {
 			ShutdownTimeout time.Duration `conf:"default:5s,noprint"`
 		}
 		App struct {
-			PollSecs time.Duration `conf:"default:30s"`
+			PollSecs time.Duration `conf:"default:5s"`
 		}
 	}
-		
+
 	cfg.Version.SVN = build
 	cfg.Version.Desc = "copyright information here"
 
@@ -102,15 +105,14 @@ func run(log *log.Logger) error {
 		}
 	}()
 
-	
 	getStats(applog, cfg.App.PollSecs)
-	
-	go func ()  {
+	checkWaterLevel(applog, cfg.App.PollSecs)
+
+	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		log.Printf("main: Metrics listening on %s", "2112")
-		http.ListenAndServe(":2112", nil)	
+		http.ListenAndServe(":2112", nil)
 	}()
-	
 
 	// =========================================================================
 	// Start API Service
@@ -196,7 +198,8 @@ func stats(w http.ResponseWriter, r *http.Request) {
 
 	b, err := json.Marshal(stats)
 	if err != nil {
-		// do something here
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, `{"error":"%s"\n`, err)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -231,7 +234,7 @@ func getStats(log *log.Logger, pollSecs time.Duration) {
 
 			b, err := json.Marshal(stats)
 			if err != nil {
-				// do something here
+				log.Printf("error parsing response | %s", err)
 			}
 
 			dhTemp.Set(temperature)
@@ -245,6 +248,39 @@ func getStats(log *log.Logger, pollSecs time.Duration) {
 
 }
 
+func checkWaterLevel(log *log.Logger, pollSecs time.Duration) {
+	go func() {
+		// Setup pins.
+		host.Init()
+		trigger := gpioreg.ByName("GPIO23")
+		echo := gpioreg.ByName("GPIO24")
+
+		for {
+			// Initiate trigger.
+			trigger.Out(gpio.High)
+			time.Sleep(time.Microsecond * 10)
+			trigger.Out(gpio.Low)
+
+			// Evaluate echo and calculate distance.
+			var startTime, endTime int64
+			for echo.Read() == gpio.Low {
+				startTime = time.Now().UnixNano()
+			}
+			for echo.Read() == gpio.High {
+				endTime = time.Now().UnixNano()
+			}
+			distance := (float32(endTime-startTime) * 17150) / 1e9
+			log.Printf("distance: %f\n", distance)
+
+			dhWaterLevel.Set(float64(distance))
+
+			time.Sleep(pollSecs)
+		}
+
+	}()
+
+}
+
 var (
 	dhTemp = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "cems_temperature",
@@ -254,7 +290,8 @@ var (
 		Name: "cems_humidity",
 		Help: "The current humidity level.",
 	})
+	dhWaterLevel = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "cems_water_level",
+		Help: "The current water level measured in cm.",
+	})
 )
-
-
-
