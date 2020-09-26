@@ -7,5 +7,5 @@ require (
 	github.com/ardanlabs/conf v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
-	periph.io/x/periph v3.6.4+incompatible // indirect
+	periph.io/x/periph v3.6.4+incompatible
 )
