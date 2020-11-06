@@ -8,6 +8,12 @@ github.com/ardanlabs/conf
 github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
+# github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21
+## explicit
+github.com/emersion/go-sasl
+# github.com/emersion/go-smtp v0.14.0
+## explicit
+github.com/emersion/go-smtp
 # github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
