@@ -6,14 +6,18 @@ import (
 	"expvar"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/MichaelS11/go-dht"
 	"github.com/ardanlabs/conf"
+	"github.com/emersion/go-sasl"
+	"github.com/emersion/go-smtp"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -54,7 +58,7 @@ func run(log *log.Logger) error {
 	}
 
 	cfg.Version.SVN = build
-	cfg.Version.Desc = "copyright information here"
+	cfg.Version.Desc = "Copyright (c) 2020 runlevl4)"
 
 	if err := conf.Parse(os.Args[1:], "CEMS", &cfg); err != nil {
 		switch err {
@@ -105,9 +109,11 @@ func run(log *log.Logger) error {
 		}
 	}()
 
-	getStats(applog, cfg.App.PollSecs)
-	checkWaterLevel(applog, cfg.App.PollSecs)
+	// go getStats(applog, cfg.App.PollSecs)
+	// go checkWaterLevel(applog, cfg.App.PollSecs)
+	go captureStats(applog, cfg.App.PollSecs)
 
+	// Start metrics server for Prometheus.
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		log.Printf("main: Metrics listening on %s", "2112")
@@ -207,78 +213,163 @@ func stats(w http.ResponseWriter, r *http.Request) {
 }
 
 func getStats(log *log.Logger, pollSecs time.Duration) {
-	go func() {
-		for {
-			err := dht.HostInit()
-			if err != nil {
-				log.Println("HostInit error:", err)
-			}
-
-			dht, err := dht.NewDHT("GPIO4", dht.Fahrenheit, "")
-			if err != nil {
-				log.Println("NewDHT error:", err)
-			}
-
-			humidity, temperature, err := dht.ReadRetry(11)
-			if err != nil {
-				log.Println("Read error:", err)
-			}
-
-			stats := struct {
-				Humidity    float64 `json:"humidity"`
-				Temperature float64 `json:"temperature"`
-			}{
-				Humidity:    humidity,
-				Temperature: temperature,
-			}
-
-			b, err := json.Marshal(stats)
-			if err != nil {
-				log.Printf("error parsing response | %s", err)
-			}
-
-			dhTemp.Set(temperature)
-			dhHumidity.Set(humidity)
-
-			log.Println(string(b))
-
-			time.Sleep(pollSecs)
+	// go func() {
+	for {
+		err := dht.HostInit()
+		if err != nil {
+			log.Println("HostInit error:", err)
 		}
-	}()
+
+		dht, err := dht.NewDHT("GPIO4", dht.Fahrenheit, "")
+		if err != nil {
+			log.Println("NewDHT error:", err)
+		}
+
+		humidity, temperature, err := dht.ReadRetry(11)
+		if err != nil {
+			log.Println("Read error:", err)
+		}
+
+		stats := struct {
+			Humidity    float64 `json:"humidity"`
+			Temperature float64 `json:"temperature"`
+		}{
+			Humidity:    humidity,
+			Temperature: temperature,
+		}
+
+		b, err := json.Marshal(stats)
+		if err != nil {
+			log.Printf("error parsing response | %s", err)
+		}
+
+		dhTemp.Set(temperature)
+		dhHumidity.Set(humidity)
+
+		log.Println(string(b))
+
+		time.Sleep(pollSecs)
+	}
+	// }()
 
 }
 
 func checkWaterLevel(log *log.Logger, pollSecs time.Duration) {
-	go func() {
-		// Setup pins.
+	// go func() {
+	// Setup pins.
+	host.Init()
+	trigger := gpioreg.ByName("GPIO23")
+	echo := gpioreg.ByName("GPIO24")
+
+	for {
+		// Initiate trigger.
+		trigger.Out(gpio.High)
+		time.Sleep(time.Microsecond * 10)
+		trigger.Out(gpio.Low)
+
+		// Evaluate echo and calculate distance.
+		var startTime, endTime int64
+		for echo.Read() == gpio.Low {
+			startTime = time.Now().UnixNano()
+		}
+		for echo.Read() == gpio.High {
+			endTime = time.Now().UnixNano()
+		}
+		distance := (float32(endTime-startTime) * 17150) / 1e9
+		log.Printf("distance: %f\n", distance/2.54)
+
+		dhWaterLevel.Set(float64((distance / 2.54) * -1))
+
+		dist := struct {
+			Distance float64
+		}{
+			Distance: float64(distance / 2.54),
+		}
+
+		b, err := json.Marshal(dist)
+		if err != nil {
+			log.Printf("error parsing distance | %s", err)
+		}
+		log.Printf(string(b))
+
+		time.Sleep(pollSecs)
+	}
+
+	// }()
+
+}
+
+func captureStats(log *log.Logger, pollSecs time.Duration) {
+	// fmt.Println("pollSecs: ", pollSecs)
+	// go func() {
+	for {
+		// Check temp/humidity.
+		err := dht.HostInit()
+		if err != nil {
+			log.Println("HostInit error:", err)
+		}
+
+		dht, err := dht.NewDHT("GPIO4", dht.Fahrenheit, "")
+		if err != nil {
+			log.Println("NewDHT error:", err)
+		}
+
+		humidity, temperature, err := dht.ReadRetry(11)
+		if err != nil {
+			log.Println("Read error:", err)
+		}
+
+		// Check water level.
 		host.Init()
 		trigger := gpioreg.ByName("GPIO23")
 		echo := gpioreg.ByName("GPIO24")
 
-		for {
-			// Initiate trigger.
-			trigger.Out(gpio.High)
-			time.Sleep(time.Microsecond * 10)
-			trigger.Out(gpio.Low)
+		// Initiate trigger.
+		trigger.Out(gpio.High)
+		time.Sleep(time.Microsecond * 10)
+		trigger.Out(gpio.Low)
 
-			// Evaluate echo and calculate distance.
-			var startTime, endTime int64
-			for echo.Read() == gpio.Low {
-				startTime = time.Now().UnixNano()
-			}
-			for echo.Read() == gpio.High {
-				endTime = time.Now().UnixNano()
-			}
-			distance := (float32(endTime-startTime) * 17150) / 1e9
-			log.Printf("distance: %f\n", distance)
+		// Evaluate echo and calculate distance.
+		var startTime, endTime int64
+		for echo.Read() == gpio.Low {
+			startTime = time.Now().UnixNano()
+		}
+		for echo.Read() == gpio.High {
+			endTime = time.Now().UnixNano()
+		}
+		distance := (float32(endTime-startTime) * 17150) / 1e9
+		// log.Printf("distance: %f\n", distance/2.54)
 
-			dhWaterLevel.Set(float64(distance))
+		dhWaterLevel.Set(float64((distance / 2.54) * -1))
 
-			time.Sleep(pollSecs)
+		// Set metrics for Prometheus.
+		dhTemp.Set(temperature)
+		dhHumidity.Set(humidity)
+		dhWaterLevel.Set(float64((distance / 2.54) * -1))
+
+		// Build response structure and marshal to JSON.
+		stats := struct {
+			Humidity    float64 `json:"humidity"`
+			Temperature float64 `json:"temperature"`
+			WaterLevel  float64 `json:"waterLevel"`
+		}{
+			Humidity:    humidity,
+			Temperature: temperature,
+			WaterLevel:  float64(distance / 2.54),
 		}
 
-	}()
+		b, err := json.Marshal(stats)
+		if err != nil {
+			log.Printf("error parsing response | %s", err)
+		}
 
+		// Log to console.
+		log.Printf(string(b))
+
+		// Take a break.
+		time.Sleep(pollSecs)
+	}
+	// }()
 }
 
 var (
@@ -295,3 +386,34 @@ var (
 		Help: "The current water level measured in cm.",
 	})
 )
+
+func sendEmail() error {
+	pwd := os.Getenv("CEMS_SMTP_PWD")
+	if pwd == "" {
+		return errors.New("missing smtp password")
+	}
+
+	smtpHost := "mail.runlevl4.com:2525"
+	to := []string{"root@runlevl4.com"}
+	from := "cems@runlevl4.com"
+
+	conn, err := net.DialTimeout("tcp", smtpHost, 5*time.Second)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+	
+	auth := sasl.NewPlainClient("", from, pwd)
+
+	// Connect to the server, authenticate, set the sender and recipient,
+	// and send the email all in one step.
+	msg := strings.NewReader("To: root@runlevl4.com\r\n" +
+		"Subject: CEMS Warning\r\n" +
+		"\r\n" +
+		"It's time to refill the misting tank.\r\n")
+	err = smtp.SendMail(smtpHost, auth, from, to, msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return nil
+}
